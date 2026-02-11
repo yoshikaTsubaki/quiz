@@ -1,1 +1,20 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>クイズ</title>
+</head>
+<body>
+  <h1>クイズ</h1>
+  <button id="btn">正解音</button>
 
+  <script>
+    const correctSound = new Audio("sounds/correct.mp3");
+    document.getElementById("btn").addEventListener("click", () => {
+      correctSound.currentTime = 0;
+      correctSound.play().catch(()=>{});
+    });
+  </script>
+</body>
+</html>
