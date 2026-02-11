@@ -1,20 +1,494 @@
+
 <!doctype html>
 <html lang="ja">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>クイズ</title>
+  <title>ヒカリヒューマン　ドライバー研修クイズ（運転＋身だしなみ）</title>
+  <style>
+    :root {
+      --bg:#f7f7fb; --card:#ffffff; --text:#111827; --muted:#6b7280;
+      --line:#e5e7eb; --ok:#16a34a; --ng:#dc2626; --btn:#111827;
+    }
+    body { margin:0; font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; background:var(--bg); color:var(--text); }
+    header { padding:16px; border-bottom:1px solid var(--line); background:#fff; position:sticky; top:0; z-index:10; }
+    header h1 { margin:0; font-size:16px; }
+    header p { margin:6px 0 0; font-size:12px; color:var(--muted); }
+    main { max-width:900px; margin:0 auto; padding:16px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .pill { display:inline-block; padding:2px 10px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:#374151; background:#fff; }
+    .btn { padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; font-weight:700; }
+    .btn.primary { background:var(--btn); color:#fff; border-color:var(--btn); }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .qno { font-size:12px; color:var(--muted); }
+    .qtext { font-size:18px; font-weight:800; margin:6px 0 10px; line-height:1.35; }
+    .choice { width:100%; text-align:left; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fff; cursor:pointer; font-weight:700; }
+    .choice:hover { background:#fafafa; }
+    .choice.ok { border-color: rgba(22,163,74,.6); background: rgba(22,163,74,.08); }
+    .choice.ng { border-color: rgba(220,38,38,.6); background: rgba(220,38,38,.08); }
+    .explain { margin-top:10px; padding:10px; border-radius:10px; background:#fafafa; border:1px solid var(--line); }
+    .explain h3 { margin:0 0 6px; font-size:13px; }
+    .explain p { margin:0; font-size:13px; color:#111827; line-height:1.6; }
+    .muted { color:var(--muted); font-size:12px; line-height:1.5; }
+    .spacer { height:12px; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    @media (max-width:700px){ .grid2{ grid-template-columns:1fr; } .qtext{ font-size:17px; } }
+    .resultBig { font-size:22px; font-weight:900; }
+    .list { margin:10px 0 0; padding-left:18px; }
+    .list li { margin:6px 0; }
+  </style>
 </head>
 <body>
-  <h1>クイズ</h1>
-  <button id="btn">正解音</button>
+<header>
+  <h1>ドライバー研修クイズ（運転＋身だしなみ）</h1>
+  <p>10問／三択。最後に採点＆解説。間違えた問題だけ復習できます。</p>
+</header>
 
-  <script>
-    const correctSound = new Audio("sounds/correct.mp3");
-    document.getElementById("btn").addEventListener("click", () => {
-      correctSound.currentTime = 0;
-      correctSound.play().catch(()=>{});
-    });
-  </script>
+<main>
+  <div class="card" id="screenStart">
+    <div class="row" style="justify-content:space-between;">
+      <div class="row">
+        <span class="pill">Webだけ</span>
+        <span class="pill">データ保存なし</span>
+        <span class="pill">音あり</span>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnToggleSound" type="button">🔊 音：ON</button>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+    <p class="muted">
+      ※iPhone/Safariは「最初の操作（ボタン押下）」がないと音が鳴らないことがあるので、
+      開始ボタンで音を“解禁”します。
+    </p>
+
+    <div class="spacer"></div>
+    <div class="row">
+      <button class="btn primary" id="btnStart" type="button">開始する</button>
+      <button class="btn" id="btnStartGrooming" type="button">身だしなみ多めで開始</button>
+      <button class="btn" id="btnStartDriving" type="button">運転多めで開始</button>
+    </div>
+  </div>
+
+  <div class="card" id="screenQuiz" style="display:none;">
+    <div class="row" style="justify-content:space-between;">
+      <div class="qno" id="qno"></div>
+      <div class="row">
+        <span class="pill" id="pillCategory">カテゴリ</span>
+        <button class="btn" id="btnQuit" type="button">中断</button>
+      </div>
+    </div>
+
+    <div class="qtext" id="qtext"></div>
+
+    <div class="grid2" id="choices"></div>
+
+    <div class="explain" id="explain" style="display:none;">
+      <h3 id="judgeTitle">解説</h3>
+      <p id="explainText"></p>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="row">
+      <button class="btn primary" id="btnNext" type="button" disabled>次へ</button>
+      <button class="btn" id="btnRetryWrong" type="button" style="display:none;">間違いだけ復習</button>
+      <button class="btn" id="btnRestart" type="button" style="display:none;">最初から</button>
+    </div>
+
+    <div class="spacer"></div>
+    <div class="muted" id="progress"></div>
+  </div>
+
+  <div class="card" id="screenResult" style="display:none;">
+    <div class="row" style="justify-content:space-between;">
+      <div class="resultBig" id="resultTitle"></div>
+      <button class="btn" id="btnBackToStart" type="button">トップへ</button>
+    </div>
+
+    <div class="spacer"></div>
+    <div id="resultBody"></div>
+
+    <div class="spacer"></div>
+    <div class="row">
+      <button class="btn primary" id="btnReviewWrong2" type="button">間違いだけ復習</button>
+      <button class="btn" id="btnRestart2" type="button">最初から</button>
+    </div>
+  </div>
+</main>
+
+<script>
+/** =========================
+ *  設定：音ファイル（リポジトリ内）
+ *  ========================= */
+const SOUND = {
+  correct: "./sounds/correct.mp3",
+  wrong: "./sounds/wrong.mp3",
+};
+
+let soundEnabled = true;
+let seCorrect = new Audio(SOUND.correct);
+let seWrong   = new Audio(SOUND.wrong);
+
+// iOS対策：ユーザー操作で一度だけ「無音再生/再生準備」っぽいことをする
+let audioUnlocked = false;
+async function unlockAudioOnce(){
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try {
+    seCorrect.volume = 0; seWrong.volume = 0;
+    await seCorrect.play(); seCorrect.pause(); seCorrect.currentTime = 0;
+    await seWrong.play();   seWrong.pause();   seWrong.currentTime   = 0;
+  } catch(e) {
+    // ブラウザによってはここで失敗しても、後で鳴ることがあるので無視
+  } finally {
+    seCorrect.volume = 1; seWrong.volume = 1;
+  }
+}
+
+function playCorrect(){
+  if (!soundEnabled) return;
+  try { seCorrect.currentTime = 0; seCorrect.play(); } catch(e){}
+}
+function playWrong(){
+  if (!soundEnabled) return;
+  try { seWrong.currentTime = 0; seWrong.play(); } catch(e){}
+}
+
+/** =========================
+ *  クイズ問題（運転＋身だしなみ）
+ *  =========================
+ * type: "driving" or "grooming"
+ */
+const QUESTIONS = [
+  // 運転・安全
+  {
+    type:"driving",
+    q:"送迎で最優先に“守るべき”ものはどれ？",
+    choices:["定刻（遅れないこと）","乗客の安全","燃費"],
+    answer:1,
+    exp:"遅れても安全は守れるけど、安全を崩すと全部終わる。急がず、余裕の運転が正解。"
+  },
+  {
+    type:"driving",
+    q:"狭い道で対向車とすれ違うとき、基本の考え方は？",
+    choices:["こちらが先に突っ込む","相手に譲らせる","安全に止まれる速度で“譲る前提”で進む"],
+    answer:2,
+    exp:"送迎は“ぶつけない”が最優先。止まれる速度とスペース確保。譲る前提が強い。"
+  },
+  {
+    type:"driving",
+    q:"雨の日、制動距離（止まる距離）を減らすために一番効くのは？",
+    choices:["車間距離を増やす","クラクションを多用","ライトを消して集中"],
+    answer:0,
+    exp:"車間＝命のバッファ。雨は路面が滑るので、車間を増やして早めの減速が基本。"
+  },
+  {
+    type:"driving",
+    q:"交差点で一時停止。停止線の手前で止まった後、次にやるべきは？",
+    choices:["そのまま一気に発進","安全確認しながら“徐行で前に出る”","後続がいるので急いで合流"],
+    answer:1,
+    exp:"見えない角は“二段階停止”が安全。止まる→見える位置へ徐行→再確認。"
+  },
+  {
+    type:"driving",
+    q:"乗客が乗り降りする瞬間、運転席で最も重要なのは？",
+    choices:["エンジンを強くふかす","ドアの開閉と周囲（自転車・歩行者）確認","スマホで次の場所確認"],
+    answer:1,
+    exp:"乗降中は事故の起点。自転車の巻き込み・ドア開け事故を潰すのがプロ。"
+  },
+
+  // 身だしなみ・接遇
+  {
+    type:"grooming",
+    q:"送迎ドライバーの身だしなみで“信用を落とす”代表例は？",
+    choices:["清潔でシンプルな服装","強い香水の匂い","名札を見える位置につける"],
+    answer:1,
+    exp:"香りは好みが分かれ、体調不良の原因にも。基本は“無臭寄り”が安全。"
+  },
+  {
+    type:"grooming",
+    q:"制服・私服どちらでも共通して大事なのは？",
+    choices:["シワ・汚れが目立つ状態","清潔感（汚れ/毛玉/ヨレ/靴）","派手なアクセで個性"],
+    answer:1,
+    exp:"送迎は“安心の見た目”が商品。服より、清潔感と靴の状態が効く。"
+  },
+  {
+    type:"grooming",
+    q:"髪型・ヒゲについて、送迎の現場で基本の考え方は？",
+    choices:["自由。なんでもOK","清潔で整っていること（伸びすぎ/寝ぐせ/無精ヒゲは避ける）","流行を優先"],
+    answer:1,
+    exp:"“だらしない”印象はクレーム直結。整ってる＝安心。"
+  },
+  {
+    type:"grooming",
+    q:"車内の印象でクレームになりやすいのは？",
+    choices:["床のゴミ・ニオイ・埃","窓が少し曇る","静かに運転する"],
+    answer:0,
+    exp:"車内は“第二の接客スペース”。ゴミ・ニオイは一発アウトになりやすい。"
+  },
+  {
+    type:"grooming",
+    q:"乗客から「寒い/暑い」と言われたときの基本対応は？",
+    choices:["我慢してもらう","無視して運転に集中","一言受け止めてから調整（できない時は理由と代案）"],
+    answer:2,
+    exp:"まず受け止める→調整。安全運転と両立できない場合は説明し代案（席移動など）。"
+  },
+];
+
+/** =========================
+ *  画面要素
+ *  ========================= */
+const screenStart  = document.getElementById("screenStart");
+const screenQuiz   = document.getElementById("screenQuiz");
+const screenResult = document.getElementById("screenResult");
+
+const btnStart = document.getElementById("btnStart");
+const btnStartGrooming = document.getElementById("btnStartGrooming");
+const btnStartDriving = document.getElementById("btnStartDriving");
+const btnToggleSound = document.getElementById("btnToggleSound");
+
+const qno = document.getElementById("qno");
+const qtext = document.getElementById("qtext");
+const choicesEl = document.getElementById("choices");
+const explainBox = document.getElementById("explain");
+const explainText = document.getElementById("explainText");
+const judgeTitle = document.getElementById("judgeTitle");
+const btnNext = document.getElementById("btnNext");
+const btnQuit = document.getElementById("btnQuit");
+const progress = document.getElementById("progress");
+const pillCategory = document.getElementById("pillCategory");
+
+const btnRetryWrong = document.getElementById("btnRetryWrong");
+const btnRestart = document.getElementById("btnRestart");
+
+const resultTitle = document.getElementById("resultTitle");
+const resultBody = document.getElementById("resultBody");
+const btnBackToStart = document.getElementById("btnBackToStart");
+const btnReviewWrong2 = document.getElementById("btnReviewWrong2");
+const btnRestart2 = document.getElementById("btnRestart2");
+
+/** =========================
+ *  状態
+ *  ========================= */
+let quiz = [];              // 出題用（10問）
+let index = 0;
+let answered = false;
+let wrongIds = [];          // 間違えた問題のインデックス（quiz内）
+let correctCount = 0;
+
+/** =========================
+ *  ユーティリティ
+ *  ========================= */
+function shuffle(arr){
+  const a = arr.slice();
+  for (let i=a.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function pick10(mode){
+  // mode: "mix" | "grooming" | "driving"
+  const driving = QUESTIONS.filter(q => q.type==="driving");
+  const grooming= QUESTIONS.filter(q => q.type==="grooming");
+
+  if (mode==="grooming"){
+    // 身だしなみ多め：身だしなみ6 + 運転4（合計10）
+    return shuffle(grooming).slice(0,6).concat(shuffle(driving).slice(0,4));
+  }
+  if (mode==="driving"){
+    // 運転多め：運転6 + 身だしなみ4
+    return shuffle(driving).slice(0,6).concat(shuffle(grooming).slice(0,4));
+  }
+  // mix：バランス良く
+  return shuffle(QUESTIONS).slice(0,10);
+}
+
+function categoryLabel(type){
+  return type==="grooming" ? "身だしなみ/接遇" : "運転/安全";
+}
+
+/** =========================
+ *  画面制御
+ *  ========================= */
+function show(screen){
+  screenStart.style.display  = "none";
+  screenQuiz.style.display   = "none";
+  screenResult.style.display = "none";
+  screen.style.display       = "block";
+}
+
+function resetState(){
+  index = 0;
+  answered = false;
+  wrongIds = [];
+  correctCount = 0;
+  btnRetryWrong.style.display = "none";
+  btnRestart.style.display = "none";
+  btnNext.style.display = "inline-block";
+  btnNext.disabled = true;
+}
+
+function renderQuestion(){
+  const item = quiz[index];
+  answered = false;
+  btnNext.disabled = true;
+  explainBox.style.display = "none";
+  choicesEl.innerHTML = "";
+
+  qno.textContent = `第 ${index+1} 問 / ${quiz.length}`;
+  pillCategory.textContent = categoryLabel(item.type);
+  qtext.textContent = item.q;
+  progress.textContent = `正解：${correctCount}　｜　間違い：${wrongIds.length}`;
+
+  item.choices.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.className = "choice";
+    b.type = "button";
+    b.textContent = c;
+    b.addEventListener("click", () => choose(i));
+    choicesEl.appendChild(b);
+  });
+}
+
+function choose(choiceIndex){
+  if (answered) return;
+  answered = true;
+
+  const item = quiz[index];
+  const buttons = Array.from(choicesEl.querySelectorAll("button.choice"));
+
+  const isCorrect = (choiceIndex === item.answer);
+  if (isCorrect){
+    correctCount++;
+    playCorrect();
+    judgeTitle.textContent = "✅ 正解";
+  } else {
+    wrongIds.push(index);
+    playWrong();
+    judgeTitle.textContent = "❌ 不正解";
+  }
+
+  // 色付け
+  buttons.forEach((b, i) => {
+    if (i === item.answer) b.classList.add("ok");
+    if (i === choiceIndex && i !== item.answer) b.classList.add("ng");
+    b.disabled = true;
+  });
+
+  explainText.textContent = item.exp;
+  explainBox.style.display = "block";
+  btnNext.disabled = false;
+}
+
+function next(){
+  if (!answered) return;
+  index++;
+  if (index >= quiz.length){
+    finish();
+    return;
+  }
+  renderQuestion();
+}
+
+function finish(){
+  show(screenResult);
+
+  const total = quiz.length;
+  const score = correctCount;
+  const rate = Math.round((score/total)*100);
+
+  resultTitle.textContent = `結果：${score}/${total}（${rate}%）`;
+
+  // ざっくり評価
+  let comment = "";
+  if (rate === 100) comment = "完璧。もう君が教官。";
+  else if (rate >= 80) comment = "かなり良い。現場で“事故りにくい人”の香り。";
+  else if (rate >= 60) comment = "合格ライン。弱点だけ潰すと一気に強くなる。";
+  else comment = "伸びしろがでかい。間違い復習だけ回すと最短で上がる。";
+
+  const wrongListHtml = wrongIds.length
+    ? `<p><strong>間違えた問題</strong>（${wrongIds.length}件）</p>
+       <ol class="list">
+         ${wrongIds.map(i => `<li>${quiz[i].q} <span class="pill">${categoryLabel(quiz[i].type)}</span></li>`).join("")}
+       </ol>`
+    : `<p><strong>間違いゼロ</strong>。今日は勝ち。</p>`;
+
+  resultBody.innerHTML = `
+    <p class="muted">${comment}</p>
+    ${wrongListHtml}
+    <p class="muted">※「間違いだけ復習」で、同じ問題だけもう一周できます。</p>
+  `;
+
+  btnReviewWrong2.disabled = (wrongIds.length === 0);
+}
+
+function start(mode){
+  resetState();
+  quiz = shuffle(pick10(mode)); // 出題順もシャッフル
+  show(screenQuiz);
+  renderQuestion();
+}
+
+/** =========================
+ *  イベント
+ *  ========================= */
+btnToggleSound.addEventListener("click", () => {
+  soundEnabled = !soundEnabled;
+  btnToggleSound.textContent = soundEnabled ? "🔊 音：ON" : "🔇 音：OFF";
+});
+
+btnStart.addEventListener("click", async () => {
+  await unlockAudioOnce();
+  start("mix");
+});
+btnStartGrooming.addEventListener("click", async () => {
+  await unlockAudioOnce();
+  start("grooming");
+});
+btnStartDriving.addEventListener("click", async () => {
+  await unlockAudioOnce();
+  start("driving");
+});
+
+btnNext.addEventListener("click", next);
+
+btnQuit.addEventListener("click", () => {
+  // 中断＝トップへ戻す
+  show(screenStart);
+});
+
+btnBackToStart.addEventListener("click", () => {
+  show(screenStart);
+});
+
+function retryWrong(){
+  if (!wrongIds.length){
+    alert("間違いがないので復習は不要です！");
+    return;
+  }
+  // 間違い問題だけで新しいクイズを作り直す
+  const wrongQuestions = wrongIds.map(i => quiz[i]);
+  quiz = shuffle(wrongQuestions);
+  resetState();
+  // 間違い復習は “今回の復習での正解数” を測るためにカウントをリセット
+  wrongIds = [];
+  correctCount = 0;
+  show(screenQuiz);
+  renderQuestion();
+}
+
+function restartAll(){
+  show(screenStart);
+}
+
+btnRetryWrong.addEventListener("click", retryWrong);
+btnRestart.addEventListener("click", restartAll);
+btnReviewWrong2.addEventListener("click", retryWrong);
+btnRestart2.addEventListener("click", restartAll);
+</script>
 </body>
 </html>
